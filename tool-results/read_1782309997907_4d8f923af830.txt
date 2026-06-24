@@ -1,0 +1,1210 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+     4→import { AdminPanel } from '@/components/admin-panel'
+     5→import {
+     6→  X,
+     7→  Truck,
+     8→  Menu,
+     9→  ShoppingCart,
+    10→  ChevronLeft,
+    11→  ChevronRight,
+    12→  Star,
+    13→  Flame,
+    14→  Minus,
+    15→  Plus,
+    16→  Package,
+    17→  ScanLine,
+    18→  Mail,
+    19→  ShieldCheck,
+    20→  ClipboardList,
+    21→  Scissors,
+    22→  Hammer,
+    23→  Play,
+    24→  CreditCard,
+    25→  RefreshCw,
+    26→  MessageCircle,
+    27→  Home as HomeIcon,
+    28→  Search,
+    29→  CheckCircle,
+    30→  Globe,
+    31→  Loader2,
+    32→  CircleCheckBig,
+    33→  Circle,
+    34→  Clock,
+    35→  MapPin,
+    36→  PackageCheck,
+    37→  Warehouse,
+    38→} from 'lucide-react'
+    39→import {
+    40→  Sheet,
+    41→  SheetTrigger,
+    42→  SheetContent,
+    43→  SheetHeader,
+    44→  SheetFooter,
+    45→  SheetTitle,
+    46→  SheetClose,
+    47→} from '@/components/ui/sheet'
+    48→import {
+    49→  DropdownMenu,
+    50→  DropdownMenuContent,
+    51→  DropdownMenuItem,
+    52→  DropdownMenuTrigger,
+    53→} from '@/components/ui/dropdown-menu'
+    54→import { useCartStore } from '@/lib/store/cart-store'
+    55→import { useI18n, type Locale } from '@/lib/i18n/context'
+    56→import { CartDrawer } from '@/components/cart/cart-drawer'
+    57→
+    58→// ─── Data ────────────────────────────────────────────────────────────────────
+    59→
+    60→const productImages = [
+    61→  '/images/img1.png',
+    62→  '/images/img2.png',
+    63→  '/images/img3.png',
+    64→  '/images/img4.png',
+    65→  '/images/img5.png',
+    66→  '/images/img6.png',
+    67→  '/images/img7.png',
+    68→  '/images/img8.png',
+    69→]
+    70→
+    71→const colorVariantKeys: { nameKey: string; image: string }[] = [
+    72→  { nameKey: 'color.oak', image: '/images/img1.png' },
+    73→  { nameKey: 'color.lightOak', image: '/images/var2.png' },
+    74→  { nameKey: 'color.black', image: '/images/var3.png' },
+    75→  { nameKey: 'color.gray', image: '/images/var4.png' },
+    76→  { nameKey: 'color.walnut', image: '/images/var5.png' },
+    77→  { nameKey: 'color.ivory', image: '/images/var6.png' },
+    78→  { nameKey: 'color.graphite', image: '/images/var7.png' },
+    79→]
+    80→
+    81→const accessoryKeys = [
+    82→  { nameKey: 'accessories.ledStrip', brand: 'Walluxe', price: 5.0, image: '/images/bump1.png' },
+    83→  { nameKey: 'accessories.installationGlue', brand: 'Walluxe', price: 2.99, image: '/images/bump2.png' },
+    84→  { nameKey: 'accessories.glueApplicator', brand: 'Walluxe', price: 3.99, image: '/images/bump3.png' },
+    85→  { nameKey: 'accessories.installationKit', brand: 'Walluxe', price: 2.99, image: '/images/bump4.png' },
+    86→]
+    87→
+    88→const reviews = [
+    89→  { name: 'Marcio S.', image: '/images/r1.jpg', rating: 5, textKey: 'review.marcio' },
+    90→  { name: 'Pedro M.', image: '/images/r2.jpg', rating: 5, textKey: 'review.pedro' },
+    91→  { name: 'Gabriela L.', image: '/images/r3.jpg', rating: 5, textKey: 'review.gabriela' },
+    92→  { name: 'Monica P.', image: '/images/r4.jpg', rating: 5, textKey: 'review.monica' },
+    93→  { name: 'Santiago T.', image: '/images/r5.png', rating: 5, textKey: 'review.santiago' },
+    94→  { name: 'Eduarda A.', image: '/images/r6.jpg', rating: 5, textKey: 'review.eduarda' },
+    95→  { name: 'Sandrine B.', image: '/images/r7.jpg', rating: 5, textKey: 'review.sandrine' },
+    96→  { name: 'Paulo S.', image: '/images/r8.jpg', rating: 5, textKey: 'review.paulo' },
+    97→  { name: 'Frederico M.', image: '/images/r9.jpg', rating: 5, textKey: 'review.frederico' },
+    98→]
+    99→
+   100→const reviewTexts: Record<string, Record<Locale, string>> = {
+   101→  'review.marcio': {
+   102→    pt: 'Fiquei surpreendido! A madeira é lindíssima e o painel acústico transformou verdadeiramente o ambiente, superando todas as minhas expectativas.',
+   103→    en: 'I was amazed! The wood is beautiful and the acoustic panel truly transformed the space, exceeding all my expectations.',
+   104→    es: '¡Quedé sorprendido! La madera es preciosa y el panel acústico realmente transformó el ambiente, superando todas mis expectativas.',
+   105→    fr: "J'étais étonné ! Le bois est magnifique et le panneau acoustique a véritablement transformé l'espace, dépassant toutes mes attentes.",
+   106→    de: 'Ich war überrascht! Das Holz ist wunderschön und das Akustikpaneel hat den Raum wirklich verwandelt und alle meine Erwartungen übertroffen.',
+   107→    it: "Sono rimasto sorpreso! Il legno è bellissimo e il pannello acustico ha trasformato veramente l'ambiente, superando tutte le mie aspettative.",
+   108→  },
+   109→  'review.pedro': {
+   110→    pt: 'Os painéis em carvalho natural que comprei para a minha casa fizeram uma diferença incrível na decoração, criando uma atmosfera completamente nova.',
+   111→    en: 'The natural oak panels I bought for my home made an incredible difference to the decor, creating a completely new atmosphere.',
+   112→    es: 'Los paneles de roble natural que compré para mi casa hicieron una diferencia increíble en la decoración, creando una atmósfera completamente nueva.',
+   113→    fr: "Les panneaux en chêne naturel que j'ai achetés pour ma maison ont fait une différence incroyable dans la décoration, créant une atmosphère complètement nouvelle.",
+   114→    de: 'Die Natur-Eichenpaneele, die ich für mein Zuhause gekauft habe, haben einen unglaublichen Unterschied in der Dekoration gemacht und eine völlig neue Atmosphäre geschaffen.',
+   115→    it: "I pannelli in rovere naturale che ho comprato per casa mia hanno fatto una differenza incredibile nella decorazione, creando un'atmosfera completamente nuova.",
+   116→  },
+   117→  'review.gabriela': {
+   118→    pt: 'A instalação foi extremamente simples, o resultado visual é fantástico e a entrega gratuita foi uma grande vantagem.',
+   119→    en: 'The installation was extremely simple, the visual result is fantastic and the free delivery was a great advantage.',
+   120→    es: 'La instalación fue extremadamente sencilla, el resultado visual es fantástico y la entrega gratuita fue una gran ventaja.',
+   121→    fr: "L'installation était extrêmement simple, le résultat visuel est fantastique et la livraison gratuite a été un grand avantage.",
+   122→    de: 'Die Montage war extrem einfach, das visuelle Ergebnis ist fantastisch und die kostenlose Lieferung war ein großer Vorteil.',
+   123→    it: "L'installazione è stata estremamente semplice, il risultato visivo è fantastico e la spedizione gratuita è stata un grande vantaggio.",
+   124→  },
+   125→  'review.monica': {
+   126→    pt: 'Eu adorei! E a qualidade é ótima; o tom de nogueira é lindo. O que interessa é a qualidade.',
+   127→    en: "I loved it! And the quality is excellent; the walnut tone is beautiful. What matters is quality.",
+   128→    es: '¡Me encantó! Y la calidad es excelente; el tono de nogal es precioso. Lo que importa es la calidad.',
+   129→    fr: "J'ai adoré ! Et la qualité est excellente ; le ton noyer est magnifique. Ce qui compte, c'est la qualité.",
+   130→    de: 'Ich habe es geliebt! Und die Qualität ist hervorragend; der Walnusston ist wunderschön. Was zählt, ist die Qualität.',
+   131→    it: "Mi è piaciuto tantissimo! E la qualità è eccellente; il tono noce è bellissimo. Quello che conta è la qualità.",
+   132→  },
+   133→  'review.santiago': {
+   134→    pt: 'Foi uma ótima compra, adorei as luzes, ficou perfeito nos painéis.',
+   135→    en: 'It was a great purchase, I loved the lights, it looked perfect on the panels.',
+   136→    es: 'Fue una excelente compra, me encantaron las luces, quedó perfecto en los paneles.',
+   137→    fr: "C'était un excellent achat, j'ai adoré les lumières, c'était parfait sur les panneaux.",
+   138→    de: 'Es war ein toller Kauf, ich habe die Lichter geliebt, es sah perfekt auf den Paneelen aus.',
+   139→    it: "È stato un ottimo acquisto, ho adorato le luci, è venuto perfetto sui pannelli.",
+   140→  },
+   141→  'review.eduarda': {
+   142→    pt: 'O nosso quarto parece ter sido rejuvenescido em 20 anos!',
+   143→    en: 'Our bedroom seems to have been rejuvenated by 20 years!',
+   144→    es: '¡Nuestro dormitorio parece haberse rejuvenecido 20 años!',
+   145→    fr: 'Notre chambre semble avoir rajeuni de 20 ans !',
+   146→    de: 'Unser Schlafzimmer wirkt um 20 Jahre verjüngt!',
+   147→    it: 'La nostra camera da letto sembra ringiovanita di 20 anni!',
+   148→  },
+   149→  'review.sandrine': {
+   150→    pt: 'Painéis com muita qualidade! Recomendo.',
+   151→    en: 'Very high quality panels! I recommend.',
+   152→    es: '¡Paneles de mucha calidad! Recomendados.',
+   153→    fr: 'Panneaux de très grande qualité ! Je recommande.',
+   154→    de: 'Sehr hochwertige Paneele! Ich empfehle.',
+   155→    it: 'Pannelli di altissima qualità! Lo consiglio.',
+   156→  },
+   157→  'review.paulo': {
+   158→    pt: 'A instalação é fácil. Fixei com fita adesiva de espuma e não tive qualquer problema. Uma ótima compra.',
+   159→    en: 'Installation is easy. I fixed it with foam tape and had no issues at all. A great purchase.',
+   160→    es: 'La instalación es fácil. Lo fijé con cinta adhesiva de espuma y no tuve ningún problema. Una gran compra.',
+   161→    fr: "L'installation est facile. Je l'ai fixé avec du ruban adhésif en mousse et je n'ai eu aucun problème. Un excellent achat.",
+   162→    de: 'Die Montage ist einfach. Ich habe es mit Schaumstoffband befestigt und hatte keine Probleme. Ein toller Kauf.',
+   163→    it: "L'installazione è facile. L'ho fissato con nastro adesivo in schiuma e non ho avuto alcun problema. Un ottimo acquisto.",
+   164→  },
+   165→  'review.frederico': {
+   166→    pt: 'Eu compraria de novo. Recomendei aos meus amigos porque são feitos de materiais excelentes.',
+   167→    en: 'I would buy again. I recommended to my friends because they are made from excellent materials.',
+   168→    es: 'Volvería a comprar. Se lo recomendé a mis amigos porque están hechos de materiales excelentes.',
+   169→    fr: "Je le rachèterais. Je l'ai recommandé à mes amis car ils sont fabriqués avec des matériaux excellents.",
+   170→    de: 'Ich würde wieder kaufen. Ich habe es meinen Freunden empfohlen, weil sie aus ausgezeichneten Materialien bestehen.',
+   171→    it: 'Lo ricomprerei. L\'ho consigliato ai miei amici perché sono fatti di materiali eccellenti.',
+   172→  },
+   173→}
+   174→
+   175→const videoThumbnails = [
+   176→  { image: '/images/img1.png', titleKey: 'videos.installationGuide' },
+   177→  { image: '/images/img3.png', titleKey: 'videos.productOverview' },
+   178→  { image: '/images/img5.png', titleKey: 'videos.beforeAfter' },
+   179→  { image: '/images/img7.png', titleKey: 'videos.customerTestimonials' },
+   180→  { image: '/images/img2.png', titleKey: 'videos.colorOptions' },
+   181→  { image: '/images/img4.png', titleKey: 'videos.roomTransformation' },
+   182→]
+   183→
+   184→// ─── Component: Announcement Banner ─────────────────────────────────────────
+   185→
+   186→function AnnouncementBanner() {
+   187→  const [visible, setVisible] = useState(true)
+   188→  const { t } = useI18n()
+   189→
+   190→  if (!visible) return null
+   191→
+   192→  return (
+   193→    <div className="relative bg-zinc-950 py-2.5 text-center text-white text-xs">
+   194→      <div className="flex items-center justify-center gap-2">
+   195→        <Truck className="h-3.5 w-3.5 flex-shrink-0" />
+   196→        <span className="font-medium">{t('announcement.freeShipping')}</span>
+   197→        <Truck className="h-3.5 w-3.5 flex-shrink-0" />
+   198→      </div>
+   199→      <button
+   200→        onClick={() => setVisible(false)}
+   201→        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white transition-colors"
+   202→        aria-label="Close banner"
+   203→      >
+   204→        <X className="h-3.5 w-3.5" />
+   205→      </button>
+   206→    </div>
+   207→  )
+   208→}
+   209→
+   210→// ─── Component: Side Menu ───────────────────────────────────────────────────
+   211→
+   212→function SideMenu() {
+   213→  const { t } = useI18n()
+   214→  const [open, setOpen] = useState(false)
+   215→
+   216→  const scrollToSection = (sectionId: string | null) => {
+   217→    setOpen(false)
+   218→    if (!sectionId) {
+   219→      window.scrollTo({ top: 0, behavior: 'smooth' })
+   220→      return
+   221→    }
+   222→    setTimeout(() => {
+   223→      const target = document.getElementById(sectionId)
+   224→      target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+   225→    }, 100)
+   226→  }
+   227→
+   228→  const navItems = [
+   229→    { icon: HomeIcon, label: t('nav.home'), sectionId: null },
+   230→    { icon: Search, label: t('nav.products') ?? 'Products', sectionId: 'product' },
+   231→    { icon: Plus, label: t('accessories.title') ?? 'Accessories', sectionId: 'accessories' },
+   232→    { icon: Star, label: t('reviews.title') ?? 'Reviews', sectionId: 'reviews' },
+   233→    { icon: Hammer, label: t('installation.title') ?? 'Installation', sectionId: 'installation' },
+   234→  ]
+   235→
+   236→  return (
+   237→    <Sheet open={open} onOpenChange={setOpen}>
+   238→      <SheetTrigger asChild>
+   239→        <button aria-label="Open menu" className="p-1.5 -ml-1.5 hover:bg-stone-100 rounded-lg transition-colors">
+   240→          <Menu className="h-5 w-5 text-zinc-800" />
+   241→        </button>
+   242→      </SheetTrigger>
+   243→      <SheetContent side="left" className="w-72 p-0">
+   244→        <SheetHeader className="p-6 pb-4">
+   245→          <div className="flex items-center justify-between">
+   246→            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+   247→            <img src="/images/walluxe-logo-nome.png" alt="Walluxe" className="h-8" />
+   248→            <SheetClose asChild>
+   249→              <button className="p-1 hover:bg-stone-100 rounded-lg transition-colors">
+   250→                <X className="h-5 w-5" />
+   251→              </button>
+   252→            </SheetClose>
+   253→          </div>
+   254→        </SheetHeader>
+   255→        <nav className="px-4">
+   256→          <div className="space-y-1">
+   257→            {navItems.map((item) => (
+   258→              <a
+   259→                key={item.sectionId ?? 'home'}
+   260→                href={item.sectionId ? `#${item.sectionId}` : '#'}
+   261→                onClick={(e) => {
+   262→                  e.preventDefault()
+   263→                  scrollToSection(item.sectionId)
+   264→                }}
+   265→                className="flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-zinc-900 hover:bg-stone-100 rounded-lg transition-colors"
+   266→              >
+   267→                <item.icon className="h-4 w-4 text-zinc-500" />
+   268→                {item.label}
+   269→              </a>
+   270→            ))}
+   271→          </div>
+   272→        </nav>
+   273→        <SheetFooter className="mt-auto p-6 border-t border-stone-100">
+   274→          <p className="text-xs text-zinc-400">{t('footer.copyright')}</p>
+   275→        </SheetFooter>
+   276→      </SheetContent>
+   277→    </Sheet>
+   278→  )
+   279→}
+   280→
+   281→// ─── Component: Header ──────────────────────────────────────────────────────
+   282→
+   283→function Header({ onCartOpen }: { onCartOpen: () => void }) {
+   284→  const totalItems = useCartStore((s) => s.totalItems)
+   285→  const { locale, setLocale, availableLocales, localeNames } = useI18n()
+   286→
+   287→  return (
+   288→    <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-zinc-100">
+   289→      <div className="flex items-center justify-between px-4 h-14">
+   290→        <SideMenu />
+   291→        <img src="/images/walluxe-logo-nome.png" alt="Walluxe" className="h-10" />
+   292→        <div className="flex items-center gap-1.5">
+   293→          {/* Language selector */}
+   294→          <DropdownMenu>
+   295→            <DropdownMenuTrigger asChild>
+   296→              <button aria-label="Change language" className="flex items-center gap-1 p-1.5 hover:bg-stone-100 rounded-lg transition-colors">
+   297→                <Globe className="h-4 w-4 text-zinc-600" />
+   298→                <span className="text-xs font-semibold text-zinc-600 uppercase">{locale}</span>
+   299→              </button>
+   300→            </DropdownMenuTrigger>
+   301→            <DropdownMenuContent align="end" className="w-40">
+   302→              {availableLocales.map((loc) => (
+   303→                <DropdownMenuItem
+   304→                  key={loc}
+   305→                  onClick={() => setLocale(loc)}
+   306→                  className={loc === locale ? 'bg-stone-100 font-semibold' : ''}
+   307→                >
+   308→                  <span className="text-xs uppercase text-zinc-400 w-6">{loc}</span>
+   309→                  <span>{localeNames[loc]}</span>
+   310→                </DropdownMenuItem>
+   311→              ))}
+   312→            </DropdownMenuContent>
+   313→          </DropdownMenu>
+   314→
+   315→          {/* Cart button */}
+   316→          <button
+   317→            onClick={onCartOpen}
+   318→            className="relative p-1.5 hover:bg-stone-100 rounded-lg transition-colors"
+   319→            aria-label="Shopping cart"
+   320→          >
+   321→            <ShoppingCart className="h-5 w-5 text-zinc-800" />
+   322→            {totalItems > 0 && (
+   323→              <span className="absolute -top-0.5 -right-0.5 bg-[#c69a5c] text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
+   324→                {totalItems > 99 ? '99+' : totalItems}
+   325→              </span>
+   326→            )}
+   327→          </button>
+   328→        </div>
+   329→      </div>
+   330→    </header>
+   331→  )
+   332→}
+   333→
+   334→// ─── Component: Image Gallery ───────────────────────────────────────────────
+   335→
+   336→function ImageGallery({ currentVariantImage }: { currentVariantImage: string }) {
+   337→  const [currentImage, setCurrentImage] = useState(0)
+   338→  const [isAutoPlaying, setIsAutoPlaying] = useState(true)
+   339→  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   340→  const scrollRef = useRef<HTMLDivElement>(null)
+   341→
+   342→  const images = useMemo(() => {
+   343→    const filtered = productImages.filter((img) => img !== currentVariantImage)
+   344→    return [currentVariantImage, ...filtered]
+   345→  }, [currentVariantImage])
+   346→
+   347→  const goTo = useCallback(
+   348→    (index: number) => {
+   349→      setCurrentImage((index + images.length) % images.length)
+   350→    },
+   351→    [images.length]
+   352→  )
+   353→
+   354→  const next = useCallback(() => goTo(currentImage + 1), [currentImage, goTo])
+   355→  const prev = useCallback(() => goTo(currentImage - 1), [currentImage, goTo])
+   356→
+   357→  // Auto-play
+   358→  useEffect(() => {
+   359→    if (isAutoPlaying) {
+   360→      intervalRef.current = setInterval(() => {
+   361→        setCurrentImage((prev) => (prev + 1) % images.length)
+   362→      }, 4000)
+   363→    }
+   364→    return () => {
+   365→      if (intervalRef.current) clearInterval(intervalRef.current)
+   366→    }
+   367→  }, [isAutoPlaying, images.length])
+   368→
+   369→  // Scroll thumbnail into view
+   370→  useEffect(() => {
+   371→    if (scrollRef.current) {
+   372→      const thumb = scrollRef.current.children[currentImage] as HTMLElement | undefined
+   373→      if (thumb) {
+   374→        thumb.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+   375→      }
+   376→    }
+   377→  }, [currentImage])
+   378→
+   379→  return (
+   380→    <div className="relative">
+   381→      {/* Main image */}
+   382→      <div
+   383→        className="relative aspect-square bg-stone-100 overflow-hidden rounded-xl"
+   384→        onTouchStart={() => setIsAutoPlaying(false)}
+   385→        onMouseDown={() => setIsAutoPlaying(false)}
+   386→      >
+   387→        <img
+   388→          src={images[currentImage]}
+   389→          alt={`Product image ${currentImage + 1}`}
+   390→          className="w-full h-full object-cover transition-opacity duration-300"
+   391→        />
+   392→
+   393→        {/* Navigation arrows */}
+   394→        <button
+   395→          onClick={prev}
+   396→          className="absolute left-2 top-1/2 -translate-y-1/2 bg-white rounded-full shadow-md p-2 hover:bg-stone-50 transition-colors"
+   397→          aria-label="Previous image"
+   398→        >
+   399→          <ChevronLeft className="h-4 w-4 text-zinc-700" />
+   400→        </button>
+   401→        <button
+   402→          onClick={next}
+   403→          className="absolute right-2 top-1/2 -translate-y-1/2 bg-white rounded-full shadow-md p-2 hover:bg-stone-50 transition-colors"
+   404→          aria-label="Next image"
+   405→        >
+   406→          <ChevronRight className="h-4 w-4 text-zinc-700" />
+   407→        </button>
+   408→
+   409→        {/* Dot indicators */}
+   410→        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5">
+   411→          {images.slice(0, 8).map((_, idx) => (
+   412→            <div
+   413→              key={idx}
+   414→              className={`rounded-full transition-all duration-300 ${
+   415→                idx === currentImage
+   416→                  ? 'bg-white w-5 h-2'
+   417→                  : 'bg-white/50 w-2 h-2'
+   418→              }`}
+   419→            />
+   420→          ))}
+   421→        </div>
+   422→      </div>
+   423→
+   424→      {/* Thumbnail strip */}
+   425→      <div
+   426→        ref={scrollRef}
+   427→        className="flex gap-2 mt-3 overflow-x-auto scrollbar-hide px-1 pb-1"
+   428→        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+   429→      >
+   430→        {images.slice(0, 8).map((img, idx) => (
+   431→          <button
+   432→            key={img}
+   433→            onClick={() => {
+   434→              setCurrentImage(idx)
+   435→              setIsAutoPlaying(false)
+   436→            }}
+   437→            className={`flex-shrink-0 h-16 w-16 rounded-lg overflow-hidden border-2 transition-all duration-200 ${
+   438→              idx === currentImage
+   439→                ? 'border-zinc-900 opacity-100'
+   440→                : 'border-transparent opacity-50 hover:opacity-75'
+   441→            }`}
+   442→          >
+   443→            <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+   444→          </button>
+   445→        ))}
+   446→      </div>
+   447→    </div>
+   448→  )
+   449→}
+   450→
+   451→// ─── Component: Accessories ─────────────────────────────────────────────────
+   452→
+   453→function Accessories() {
+   454→  const addItem = useCartStore((s) => s.addItem)
+   455→  const { t } = useI18n()
+   456→
+   457→  const addAccessory = (item: (typeof accessoryKeys)[number]) => {
+   458→    addItem({
+   459→      id: `accessory-${item.nameKey}`,
+   460→      name: t(item.nameKey),
+   461→      price: item.price,
+   462→      quantity: 1,
+   463→      color: 'Default',
+   464→      image: item.image,
+   465→    })
+   466→  }
+   467→
+   468→  return (
+   469→    <section className="space-y-4">
+   470→      <h2 className="text-lg font-bold text-zinc-900">{t('accessories.title')}</h2>
+   471→      <div className="space-y-3">
+   472→        {accessoryKeys.map((item) => (
+   473→          <div key={item.nameKey} className="flex items-center gap-3 rounded-xl border border-zinc-200 p-3">
+   474→            <img src={item.image} alt={t(item.nameKey)} className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+   475→            <div className="min-w-0 flex-1">
+   476→              <p className="truncate text-sm font-semibold text-zinc-900">{t(item.nameKey)}</p>
+   477→              <p className="text-xs text-zinc-500">{item.brand}</p>
+   478→              <p className="text-sm font-bold text-zinc-900">€{item.price.toFixed(2).replace('.', ',')}</p>
+   479→            </div>
+   480→            <button
+   481→              onClick={() => addAccessory(item)}
+   482→              className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors active:scale-95 bg-stone-100 text-zinc-900 hover:bg-stone-200"
+   483→              aria-label={t('accessories.add')}
+   484→            >
+   485→              <Plus className="h-3 w-3" />
+   486→              {t('accessories.add')}
+   487→            </button>
+   488→          </div>
+   489→        ))}
+   490→      </div>
+   491→    </section>
+   492→  )
+   493→}
+   494→
+   495→// ─── Component: Order Tracking ──────────────────────────────────────────────
+   496→
+   497→const STATUS_ICONS: Record<string, typeof Circle> = {
+   498→  payment: CreditCard,
+   499→  preparing: ClipboardList,
+   500→  shipped: Warehouse,
+   501→  transit: Truck,
+   502→  expected: MapPin,
+   503→  delivered: PackageCheck,
+   504→}
+   505→
+   506→const STATUS_COLORS: Record<string, string> = {
+   507→  payment: 'text-amber-500',
+   508→  preparing: 'text-blue-500',
+   509→  shipped: 'text-indigo-500',
+   510→  transit: 'text-purple-500',
+   511→  expected: 'text-orange-500',
+   512→  delivered: 'text-emerald-500',
+   513→}
+   514→
+   515→function OrderTracking() {
+   516→  const { t } = useI18n()
+   517→  const [trackingCode, setTrackingCode] = useState('')
+   518→  const [loading, setLoading] = useState(false)
+   519→  const [result, setResult] = useState<any>(null)
+   520→  const [error, setError] = useState<string | null>(null)
+   521→  const [searched, setSearched] = useState(false)
+   522→
+   523→  const handleSearch = async () => {
+   524→    const code = trackingCode.trim().toUpperCase()
+   525→    if (!code) return
+   526→
+   527→    setLoading(true)
+   528→    setError(null)
+   529→    setResult(null)
+   530→    setSearched(true)
+   531→
+   532→    try {
+   533→      const res = await fetch(`/api/tracking/${encodeURIComponent(code)}`)
+   534→      const data = await res.json()
+   535→
+   536→      if (!res.ok) {
+   537→        setError(data.error || t('tracking.notFound'))
+   538→        return
+   539→      }
+   540→
+   541→      setResult(data)
+   542→    } catch {
+   543→      setError(t('tracking.searchError'))
+   544→    } finally {
+   545→      setLoading(false)
+   546→    }
+   547→  }
+   548→
+   549→  const handleKeyDown = (e: React.KeyboardEvent) => {
+   550→    if (e.key === 'Enter') handleSearch()
+   551→  }
+   552→
+   553→  return (
+   554→    <section className="space-y-4">
+   555→      <div className="text-center space-y-1">
+   556→        <div className="flex items-center justify-center gap-2">
+   557→          <Package className="h-5 w-5 text-zinc-700" />
+   558→          <h2 className="text-base font-bold text-zinc-900">{t('tracking.title')}</h2>
+   559→        </div>
+   560→        <p className="text-xs text-zinc-500 leading-relaxed">
+   561→          {t('tracking.description')}
+   562→        </p>
+   563→      </div>
+   564→
+   565→      {/* Search input */}
+   566→      <div className="flex gap-2">
+   567→        <div className="relative flex-1">
+   568→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+   569→          <input
+   570→            type="text"
+   571→            value={trackingCode}
+   572→            onChange={(e) => setTrackingCode(e.target.value)}
+   573→            onKeyDown={handleKeyDown}
+   574→            placeholder="WLX-XXXXXX"
+   575→            maxLength={12}
+   576→            className="w-full h-10 pl-9 pr-3 text-sm rounded-lg border border-zinc-200 bg-white focus:outline-none focus:ring-2 focus:ring-[#c69a5c]/30 focus:border-[#c69a5c] placeholder:text-zinc-400 uppercase tracking-wider font-mono"
+   577→          />
+   578→        </div>
+   579→        <button
+   580→          type="button"
+   581→          onClick={handleSearch}
+   582→          disabled={loading || !trackingCode.trim()}
+   583→          className="h-10 px-4 rounded-lg bg-[#c69a5c] hover:bg-[#b0864e] text-white text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+   584→        >
+   585→          {loading ? (
+   586→            <Loader2 className="h-4 w-4 animate-spin" />
+   587→          ) : (
+   588→            <Search className="h-4 w-4" />
+   589→          )}
+   590→          {t('tracking.search') || 'Pesquisar'}
+   591→        </button>
+   592→      </div>
+   593→
+   594→      {/* Error */}
+   595→      {error && searched && (
+   596→        <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-xs text-red-600 text-center">
+   597→          {error}
+   598→        </div>
+   599→      )}
+   600→
+   601→      {/* Result: Timeline */}
+   602→      {result && (
+   603→        <div className="rounded-xl border border-zinc-100 bg-white p-4 space-y-4 animate-in fade-in slide-in-from-bottom-2">
+   604→          {/* Order info */}
+   605→          <div className="flex items-center justify-between">
+   606→            <div>
+   607→              <p className="text-xs text-zinc-400 uppercase tracking-wider font-medium">
+   608→                {t('tracking.orderNumber') || 'Encomenda'}
+   609→              </p>
+   610→              <p className="text-sm font-bold font-mono text-zinc-900">
+   611→                {result.trackingNumber}
+   612→              </p>
+   613→            </div>
+   614→            <div className="text-right">
+   615→              <p className="text-xs text-zinc-400">{t('cart.total')}</p>
+   616→              <p className="text-sm font-bold text-zinc-900">
+   617→                €{result.amount.toFixed(2).replace('.', ',')}
+   618→              </p>
+   619→            </div>
+   620→          </div>
+   621→
+   622→          {/* Current status badge */}
+   623→          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-50">
+   624→            {(() => {
+   625→              const StatusIcon = STATUS_ICONS[result.status] || Circle
+   626→              return <StatusIcon className="h-4 w-4 text-[#c69a5c]" />
+   627→            })()}
+   628→            <span className="text-sm font-semibold text-zinc-900">
+   629→              {result.statusLabel}
+   630→            </span>
+   631→          </div>
+   632→
+   633→          {/* Timeline */}
+   634→          <div className="space-y-0">
+   635→            {result.timeline.map(
+   636→              (step: { key: string; label: string; completed: boolean; active: boolean; upcoming: boolean }, i: number) => {
+   637→                const StepIcon = STATUS_ICONS[step.key] || Circle
+   638→                const isLast = i === result.timeline.length - 1
+   639→
+   640→                return (
+   641→                  <div key={step.key} className="flex gap-3">
+   642→                    {/* Line + dot */}
+   643→                    <div className="flex flex-col items-center">
+   644→                      <div
+   645→                        className={`h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0 ${
+   646→                          step.active
+   647→                            ? 'bg-[#c69a5c] text-white ring-4 ring-[#c69a5c]/10'
+   648→                            : step.completed
+   649→                              ? 'bg-emerald-500 text-white'
+   650→                              : 'bg-stone-100 text-zinc-300'
+   651→                        }`}
+   652→                      >
+   653→                        <StepIcon className="h-3.5 w-3.5" />
+   654→                      </div>
+   655→                      {!isLast && (
+   656→                        <div
+   657→                          className={`w-0.5 h-6 ${
+   658→                            step.completed ? 'bg-emerald-400' : 'bg-stone-200'
+   659→                          }`}
+   660→                        />
+   661→                      )}
+   662→                    </div>
+   663→
+   664→                    {/* Label */}
+   665→                    <div className={`pt-1 ${isLast ? 'pb-0' : ''}`}>
+   666→                      <p
+   667→                        className={`text-xs font-medium ${
+   668→                          step.active
+   669→                            ? 'text-zinc-900'
+   670→                            : step.completed
+   671→                              ? 'text-zinc-500'
+   672→                              : 'text-zinc-300'
+   673→                        }`}
+   674→                      >
+   675→                        {step.label}
+   676→                      </p>
+   677→                    </div>
+   678→                  </div>
+   679→                )
+   680→              },
+   681→            )}
+   682→          </div>
+   683→        </div>
+   684→      )}
+   685→
+   686→      {/* Info cards (only show when no result) */}
+   687→      {!result && !error && (
+   688→        <div className="space-y-2.5">
+   689→          {[
+   690→            {
+   691→              icon: ScanLine,
+   692→              color: 'text-emerald-600',
+   693→              bg: 'bg-emerald-50',
+   694→              title: t('tracking.autoCode'),
+   695→              description: t('tracking.autoCodeDesc'),
+   696→            },
+   697→            {
+   698→              icon: Mail,
+   699→              color: 'text-blue-600',
+   700→              bg: 'bg-blue-50',
+   701→              title: t('tracking.emailSent'),
+   702→              description: t('tracking.emailSentDesc'),
+   703→            },
+   704→            {
+   705→              icon: ShieldCheck,
+   706→              color: 'text-violet-600',
+   707→              bg: 'bg-violet-50',
+   708→              title: t('tracking.securePurchase'),
+   709→              description: t('tracking.securePurchaseDesc'),
+   710→            },
+   711→          ].map((feature) => (
+   712→            <div
+   713→              key={feature.title}
+   714→              className="rounded-xl bg-stone-100/80 p-3 flex items-start gap-3"
+   715→            >
+   716→              <div
+   717→                className={`h-9 w-9 rounded-lg ${feature.bg} flex items-center justify-center flex-shrink-0`}
+   718→              >
+   719→                <feature.icon className={`h-4 w-4 ${feature.color}`} />
+   720→              </div>
+   721→              <div>
+   722→                <p className="text-sm font-semibold text-zinc-900">
+   723→                  {feature.title}
+   724→                </p>
+   725→                <p className="text-xs text-zinc-500 mt-0.5">
+   726→                  {feature.description}
+   727→                </p>
+   728→              </div>
+   729→            </div>
+   730→          ))}
+   731→        </div>
+   732→      )}
+   733→    </section>
+   734→  )
+   735→}
+   736→
+   737→// ─── Component: Product Description ─────────────────────────────────────────
+   738→
+   739→function ProductDescription() {
+   740→  const { t } = useI18n()
+   741→
+   742→  return (
+   743→    <section className="space-y-5">
+   744→      <h2 className="text-lg font-bold text-zinc-900">{t('description.title')}</h2>
+   745→
+   746→      <div className="space-y-4 text-sm text-zinc-500 leading-relaxed">
+   747→        <p>{t('description.maintenance')}</p>
+   748→
+   749→        <div>
+   750→          <h3 className="text-base font-semibold text-zinc-900 mb-2">{t('description.dimensions')}</h3>
+   751→          <p className="text-sm text-zinc-500">{t('description.totalDimensions')}</p>
+   752→          <p className="text-sm text-zinc-500">{t('description.slats')}</p>
+   753→        </div>
+   754→
+   755→        <div>
+   756→          <h3 className="text-base font-semibold text-zinc-900 mb-2">{t('description.advantages')}</h3>
+   757→          <ul className="space-y-2">
+   758→            {[t('description.adv1'), t('description.adv2'), t('description.adv3'), t('description.adv4')].map((text, i) => (
+   759→              <li key={i} className="flex items-start gap-2">
+   760→                <CheckCircle className="h-4 w-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+   761→                <span>{text}</span>
+   762→              </li>
+   763→            ))}
+   764→          </ul>
+   765→          <p className="mt-3 text-sm text-zinc-500">{t('description.closing')}</p>
+   766→        </div>
+   767→      </div>
+   768→    </section>
+   769→  )
+   770→}
+   771→
+   772→// ─── Component: Customer Reviews ────────────────────────────────────────────
+   773→
+   774→function CustomerReviews() {
+   775→  const { t, locale } = useI18n()
+   776→  const allReviews = [...reviews, ...reviews]
+   777→
+   778→  return (
+   779→    <section className="space-y-4">
+   780→      <h2 className="text-lg font-bold text-zinc-900">{t('reviews.title')}</h2>
+   781→      <div
+   782→        className="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory"
+   783→        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+   784→      >
+   785→        {allReviews.map((review, idx) => (
+   786→          <div
+   787→            key={`${review.name}-${idx}`}
+   788→            className="flex-shrink-0 w-[280px] snap-start bg-white rounded-xl border border-zinc-100 overflow-hidden shadow-sm"
+   789→          >
+   790→            <div className="h-48 overflow-hidden">
+   791→              <img
+   792→                src={review.image}
+   793→                alt={`${review.name}'s review`}
+   794→                className="w-full h-full object-cover"
+   795→              />
+   796→            </div>
+   797→            <div className="p-4 space-y-2.5">
+   798→              <div className="flex items-center gap-0.5">
+   799→                {Array.from({ length: review.rating }).map((_, i) => (
+   800→                  <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+   801→                ))}
+   802→              </div>
+   803→              <p className="text-sm text-zinc-600 leading-relaxed line-clamp-3">
+   804→                &ldquo;{reviewTexts[review.textKey]?.[locale] || ''}&rdquo;
+   805→              </p>
+   806→              <div className="flex items-center gap-2.5 pt-1">
+   807→                <div className="h-8 w-8 rounded-full bg-zinc-200 flex items-center justify-center text-xs font-bold text-zinc-600">
+   808→                  {review.name.charAt(0)}
+   809→                </div>
+   810→                <span className="text-sm font-semibold text-zinc-900">{review.name}</span>
+   811→              </div>
+   812→            </div>
+   813→          </div>
+   814→        ))}
+   815→      </div>
+   816→    </section>
+   817→  )
+   818→}
+   819→
+   820→// ─── Component: Installation Steps ──────────────────────────────────────────
+   821→
+   822→function InstallationSteps() {
+   823→  const { t } = useI18n()
+   824→  const steps = [
+   825→    { number: 1, icon: ClipboardList, title: t('installation.preparation'), description: t('installation.preparationDesc') },
+   826→    { number: 2, icon: Scissors, title: t('installation.cutting'), description: t('installation.cuttingDesc') },
+   827→    { number: 3, icon: Hammer, title: t('installation.application'), description: t('installation.applicationDesc') },
+   828→  ]
+   829→
+   830→  return (
+   831→    <section className="space-y-5">
+   832→      <h2 className="text-lg font-bold text-zinc-900 text-center">{t('installation.title')}</h2>
+   833→      <div className="grid grid-cols-3 gap-4">
+   834→        {steps.map((step) => (
+   835→          <div key={step.number} className="text-center space-y-3">
+   836→            <div className="relative mx-auto w-16 h-16">
+   837→              <div className="h-16 w-16 rounded-full bg-stone-100 flex items-center justify-center">
+   838→                <step.icon className="h-7 w-7 text-zinc-600" />
+   839→              </div>
+   840→              <div className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-[#c69a5c] text-white flex items-center justify-center text-xs font-bold shadow-sm">
+   841→                {step.number}
+   842→              </div>
+   843→            </div>
+   844→            <h3 className="text-sm font-semibold text-zinc-900">{step.title}</h3>
+   845→            <p className="text-xs text-zinc-500 leading-relaxed">{step.description}</p>
+   846→          </div>
+   847→        ))}
+   848→      </div>
+   849→    </section>
+   850→  )
+   851→}
+   852→
+   853→// ─── Component: Video Section ───────────────────────────────────────────────
+   854→
+   855→function VideoSection() {
+   856→  const { t } = useI18n()
+   857→
+   858→  return (
+   859→    <section className="space-y-4">
+   860→      <h2 className="text-lg font-bold text-zinc-900">{t('videos.title')}</h2>
+   861→      <div className="grid grid-cols-2 gap-3">
+   862→        {videoThumbnails.map((video, idx) => (
+   863→          <button
+   864→            key={idx}
+   865→            className="relative aspect-[4/3] rounded-xl overflow-hidden bg-stone-100 group"
+   866→          >
+   867→            <img
+   868→              src={video.image}
+   869→              alt={t(video.titleKey)}
+   870→              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+   871→            />
+   872→            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+   873→              <div className="h-12 w-12 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+   874→                <Play className="h-5 w-5 text-zinc-900 ml-0.5" fill="currentColor" />
+   875→              </div>
+   876→            </div>
+   877→          </button>
+   878→        ))}
+   879→      </div>
+   880→    </section>
+   881→  )
+   882→}
+   883→
+   884→// ─── Component: Why Buy From Us ─────────────────────────────────────────────
+   885→
+   886→function WhyBuyFromUs() {
+   887→  const { t } = useI18n()
+   888→  const reasons = [
+   889→    { icon: Truck, title: t('whyBuy.freeShipping'), description: t('whyBuy.freeShippingDesc') },
+   890→    { icon: CreditCard, title: t('whyBuy.securePurchase'), description: t('whyBuy.securePurchaseDesc') },
+   891→    { icon: RefreshCw, title: t('whyBuy.easyReturns'), description: t('whyBuy.easyReturnsDesc') },
+   892→    { icon: MessageCircle, title: t('whyBuy.customerSupport'), description: t('whyBuy.customerSupportDesc') },
+   893→  ]
+   894→
+   895→  return (
+   896→    <section className="space-y-4">
+   897→      <h2 className="text-lg font-bold text-zinc-900">{t('whyBuy.title')}</h2>
+   898→      <div className="grid grid-cols-2 gap-3">
+   899→        {reasons.map((reason) => (
+   900→          <div key={reason.title} className="text-center space-y-2 p-3 rounded-xl bg-stone-50">
+   901→            <div className="mx-auto h-10 w-10 rounded-full bg-zinc-900 flex items-center justify-center">
+   902→              <reason.icon className="h-5 w-5 text-white" />
+   903→            </div>
+   904→            <h3 className="text-sm font-semibold text-zinc-900">{reason.title}</h3>
+   905→            <p className="text-xs text-zinc-500">{reason.description}</p>
+   906→          </div>
+   907→        ))}
+   908→      </div>
+   909→    </section>
+   910→  )
+   911→}
+   912→
+   913→// ─── Component: About Section ───────────────────────────────────────────────
+   914→
+   915→function AboutSection() {
+   916→  const { t } = useI18n()
+   917→
+   918→  return (
+   919→    <section className="space-y-4">
+   920→      <div className="relative rounded-2xl overflow-hidden aspect-[16/9] bg-gradient-to-br from-zinc-800 via-zinc-700 to-zinc-900">
+   921→        <div className="absolute inset-0 flex items-center justify-center">
+   922→          <div className="text-center space-y-3 px-6">
+   923→            <div className="h-16 w-16 mx-auto rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+   924→              <img src="/images/walluxe-logo-nome.png" alt="Walluxe" className="h-8" />
+   925→            </div>
+   926→            <p className="text-white/80 text-xs font-medium tracking-wider uppercase">{t('about.team')}</p>
+   927→          </div>
+   928→        </div>
+   929→      </div>
+   930→
+   931→      <div className="space-y-3">
+   932→        <h2 className="text-lg font-bold text-zinc-900 leading-snug">{t('about.title')}</h2>
+   933→        <p className="text-sm text-zinc-500 leading-relaxed">
+   934→          <strong className="text-zinc-900">{t('about.description')}</strong>
+   935→        </p>
+   936→      </div>
+   937→    </section>
+   938→  )
+   939→}
+   940→
+   941→// ─── Component: Footer ──────────────────────────────────────────────────────
+   942→
+   943→function Footer() {
+   944→  const { t } = useI18n()
+   945→  const links = [
+   946→    { key: 'footer.shipping', href: '#tracking', sectionId: 'tracking' },
+   947→    { key: 'footer.privacy', href: '#', sectionId: null },
+   948→    { key: 'footer.returns', href: '#why-buy', sectionId: 'why-buy' },
+   949→    { key: 'footer.terms', href: '#', sectionId: null },
+   950→    { key: 'footer.contact', href: '#about', sectionId: 'about' },
+   951→  ]
+   952→
+   953→  const handleFooterClick = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string | null) => {
+   954→    if (!sectionId) return
+   955→    e.preventDefault()
+   956→    const target = document.getElementById(sectionId)
+   957→    target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+   958→  }
+   959→
+   960→  return (
+   961→    <footer className="bg-zinc-950 text-white mt-8">
+   962→      <div className="space-y-6 py-8 px-6">
+   963→        <div className="flex justify-center">
+   964→          <img src="/images/walluxe-logo-nome.png" alt="Walluxe" className="h-8 brightness-0 invert opacity-90" />
+   965→        </div>
+   966→        <nav className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+   967→          {links.map((link) => (
+   968→            <a
+   969→              key={link.key}
+   970→              href={link.href}
+   971→              onClick={(e) => handleFooterClick(e, link.sectionId)}
+   972→              className="text-xs text-zinc-400 hover:text-white transition-colors"
+   973→            >
+   974→              {t(link.key)}
+   975→            </a>
+   976→          ))}
+   977→        </nav>
+   978→        <div className="border-t border-zinc-800 pt-4 text-center">
+   979→          <p className="text-xs text-zinc-500">{t('footer.copyright')}</p>
+   980→        </div>
+   981→      </div>
+   982→    </footer>
+   983→  )
+   984→}
+   985→
+   986→// ─── Product Details Section ────────────────────────────────────────────────
+   987→
+   988→function ProductDetailsSection({
+   989→  selectedColor,
+   990→  onColorChange,
+   991→  onCartOpen,
+   992→}: {
+   993→  selectedColor: number
+   994→  onColorChange: (idx: number) => void
+   995→  onCartOpen: () => void
+   996→}) {
+   997→  const [quantity, setQuantity] = useState(1)
+   998→  const addItem = useCartStore((s) => s.addItem)
+   999→  const { t } = useI18n()
+  1000→
+  1001→  const handleAddToCart = () => {
+  1002→    addItem({
+  1003→      id: 'flexible-acoustic-panel',
+  1004→      name: t('product.title'),
+  1005→      price: 5.0,
+  1006→      quantity,
+  1007→      color: t(colorVariantKeys[selectedColor].nameKey),
+  1008→      image: colorVariantKeys[selectedColor].image,
+  1009→    })
+  1010→  }
+  1011→
+  1012→  const handleBuyNow = () => {
+  1013→    handleAddToCart()
+  1014→    onCartOpen()
+  1015→  }
+  1016→
+  1017→  return (
+  1018→    <div className="space-y-5">
+  1019→      {/* Title */}
+  1020→      <div>
+  1021→        <h1 className="text-2xl font-bold text-zinc-900 leading-tight">
+  1022→          {t('product.title')}
+  1023→        </h1>
+  1024→      </div>
+  1025→
+  1026→      {/* Rating */}
+  1027→      <div className="flex items-center gap-2">
+  1028→        <div className="flex items-center gap-0.5">
+  1029→          {Array.from({ length: 5 }).map((_, i) => (
+  1030→            <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
+  1031→          ))}
+  1032→        </div>
+  1033→        <span className="text-sm text-zinc-500">{t('product.reviews')}</span>
+  1034→      </div>
+  1035→
+  1036→      {/* High demand badge */}
+  1037→      <div className="inline-flex items-center gap-1.5 bg-stone-100 rounded-full px-3 py-1">
+  1038→        <Flame className="h-3.5 w-3.5 text-orange-500" />
+  1039→        <span className="text-xs font-medium text-zinc-700">{t('product.highDemand')}</span>
+  1040→      </div>
+  1041→
+  1042→      {/* Price */}
+  1043→      <div className="flex items-center gap-3 flex-wrap">
+  1044→        <span className="text-3xl font-extrabold text-zinc-900">€5.00</span>
+  1045→        <span className="text-lg text-zinc-400 line-through">€21.00</span>
+  1046→        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold text-white bg-[#ef2f1f]">
+  1047→          {t('product.saveAmount')}
+  1048→        </span>
+  1049→      </div>
+  1050→
+  1051→      {/* Quantity */}
+  1052→      <div className="flex items-center gap-4">
+  1053→        <span className="text-sm font-medium text-zinc-600">{t('product.quantity')}</span>
+  1054→        <div className="flex items-center border border-zinc-200 rounded-lg overflow-hidden">
+  1055→          <button
+  1056→            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+  1057→            className="px-3 py-2 hover:bg-stone-50 transition-colors"
+  1058→            aria-label="Decrease quantity"
+  1059→          >
+  1060→            <Minus className="h-4 w-4 text-zinc-600" />
+  1061→          </button>
+  1062→          <span className="px-4 py-2 text-sm font-semibold text-zinc-900 min-w-[2.5rem] text-center tabular-nums">
+  1063→            {quantity}
+  1064→          </span>
+  1065→          <button
+  1066→            onClick={() => setQuantity(Math.min(99, quantity + 1))}
+  1067→            className="px-3 py-2 hover:bg-stone-50 transition-colors"
+  1068→            aria-label="Increase quantity"
+  1069→          >
+  1070→            <Plus className="h-4 w-4 text-zinc-600" />
+  1071→          </button>
+  1072→        </div>
+  1073→      </div>
+  1074→
+  1075→      {/* Color selector */}
+  1076→      <div className="space-y-3">
+  1077→        <div className="flex items-center gap-2">
+  1078→          <span className="text-sm font-medium text-zinc-600">{t('product.color')}</span>
+  1079→          <span className="text-sm font-semibold text-zinc-900">{t(colorVariantKeys[selectedColor].nameKey)}</span>
+  1080→        </div>
+  1081→        <div className="flex items-center gap-2 flex-wrap">
+  1082→          {colorVariantKeys.map((variant, idx) => (
+  1083→            <button
+  1084→              key={variant.nameKey}
+  1085→              onClick={() => onColorChange(idx)}
+  1086→              className={`h-11 w-11 rounded-lg overflow-hidden border-2 transition-all duration-200 ${
+  1087→                idx === selectedColor
+  1088→                  ? 'border-zinc-900 ring-1 ring-zinc-900/20'
+  1089→                  : 'border-zinc-200 hover:border-zinc-300'
+  1090→              }`}
+  1091→              title={t(variant.nameKey)}
+  1092→              aria-label={`Select color ${t(variant.nameKey)}`}
+  1093→            >
+  1094→              <img
+  1095→                src={variant.image}
+  1096→                alt={t(variant.nameKey)}
+  1097→                className="w-full h-full object-cover"
+  1098→              />
+  1099→            </button>
+  1100→          ))}
+  1101→        </div>
+  1102→      </div>
+  1103→
+  1104→      {/* Buttons */}
+  1105→      <div className="space-y-3 pt-1">
+  1106→        <button
+  1107→          onClick={handleAddToCart}
+  1108→          className="w-full bg-[#c69a5c] hover:opacity-90 text-white font-semibold rounded-lg py-3.5 text-base transition-opacity active:scale-[0.98]"
+  1109→        >
+  1110→          {t('product.addToCart')}
+  1111→        </button>
+  1112→        <button
+  1113→          onClick={handleBuyNow}
+  1114→          className="w-full bg-zinc-900 hover:opacity-90 text-white font-semibold rounded-lg py-3.5 text-base transition-opacity active:scale-[0.98]"
+  1115→        >
+  1116→          {t('product.buyNow')}
+  1117→        </button>
+  1118→      </div>
+  1119→    </div>
+  1120→  )
+  1121→}
+  1122→
+  1123→// ─── Main Page ──────────────────────────────────────────────────────────────
+  1124→
+  1125→export default function Home() {
+  1126→  const [selectedColor, setSelectedColor] = useState(0)
+  1127→  const [cartOpen, setCartOpen] = useState(false)
+  1128→  const [showAdmin, setShowAdmin] = useState(false)
+  1129→  const currentVariantImage = colorVariantKeys[selectedColor].image
+  1130→
+  1131→  // Show admin panel when URL hash is #admin
+  1132→  useEffect(() => {
+  1133→    const checkHash = () => setShowAdmin(window.location.hash === '#admin')
+  1134→    checkHash()
+  1135→    window.addEventListener('hashchange', checkHash)
+  1136→    return () => window.removeEventListener('hashchange', checkHash)
+  1137→  }, [])
+  1138→
+  1139→  if (showAdmin) return <AdminPanel />
+  1140→
+  1141→  return (
+  1142→    <div className="min-h-screen bg-white flex flex-col">
+  1143→      {/* Announcement Banner */}
+  1144→      <AnnouncementBanner />
+  1145→
+  1146→      {/* Sticky Header */}
+  1147→      <Header onCartOpen={() => setCartOpen(true)} />
+  1148→
+  1149→      {/* Main Content */}
+  1150→      <main className="flex-1 mx-auto w-full max-w-lg px-4 py-5 space-y-8">
+  1151→        {/* Image Gallery */}
+  1152→        <div id="gallery">
+  1153→          <ImageGallery key={currentVariantImage} currentVariantImage={currentVariantImage} />
+  1154→        </div>
+  1155→
+  1156→        {/* Product Details */}
+  1157→        <div id="product">
+  1158→          <ProductDetailsSection selectedColor={selectedColor} onColorChange={setSelectedColor} onCartOpen={() => setCartOpen(true)} />
+  1159→        </div>
+  1160→
+  1161→        {/* Accessories */}
+  1162→        <div id="accessories">
+  1163→          <Accessories />
+  1164→        </div>
+  1165→
+  1166→        {/* Order Tracking */}
+  1167→        <div id="tracking">
+  1168→          <OrderTracking />
+  1169→        </div>
+  1170→
+  1171→        {/* Product Description */}
+  1172→        <div id="description">
+  1173→          <ProductDescription />
+  1174→        </div>
+  1175→
+  1176→        {/* Customer Reviews */}
+  1177→        <div id="reviews">
+  1178→          <CustomerReviews />
+  1179→        </div>
+  1180→
+  1181→        {/* Installation Steps */}
+  1182→        <div id="installation">
+  1183→          <InstallationSteps />
+  1184→        </div>
+  1185→
+  1186→        {/* Video Section */}
+  1187→        <div id="videos">
+  1188→          <VideoSection />
+  1189→        </div>
+  1190→
+  1191→        {/* Why Buy From Us */}
+  1192→        <div id="why-buy">
+  1193→          <WhyBuyFromUs />
+  1194→        </div>
+  1195→
+  1196→        {/* About Section */}
+  1197→        <div id="about">
+  1198→          <AboutSection />
+  1199→        </div>
+  1200→      </main>
+  1201→
+  1202→      {/* Footer */}
+  1203→      <Footer />
+  1204→
+  1205→      {/* Cart Drawer */}
+  1206→      <CartDrawer open={cartOpen} onOpenChange={setCartOpen} />
+  1207→    </div>
+  1208→  )
+  1209→}
+  1210→
