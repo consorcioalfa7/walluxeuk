@@ -1,49 +1,80 @@
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+
+/**
+ * Stateless XPayments Checkout Route
+ *
+ * Generates a checkout session via XPayments API.
+ * No local database — cart items are sent in metadata.
+ * XPayments is the single source of truth for order/payment state.
+ */
+
+function generateTrackingNumber(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)]
+  }
+  return `WLX-${code}`
+}
 
 export async function POST(req: Request) {
   try {
-    const { items, totalAmount, customerEmail, customerName } = await req.json()
+    const body = await req.json()
+    const { items, totalAmount, customerEmail, customerName, shippingAddress } = body
 
     if (!totalAmount || totalAmount <= 0) {
-      return NextResponse.json({ error: 'Valor total inválido.' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Valor total inválido.' },
+        { status: 400 },
+      )
     }
 
-    // 1. Criar a Encomenda na Base de Dados local (SQLite) como PENDING
-    const newOrder = await db.order.create({
-      data: {
-        amount: totalAmount,
-        currency: 'EUR',
-        status: 'PENDING',
-        method: 'xpayments',
-        customerEmail: customerEmail || 'cliente@walluxe.com',
-        customerName: customerName || 'Cliente Walluxe',
-        items: items ? JSON.stringify(items) : null,
-      },
-    })
+    const trackingNumber = generateTrackingNumber()
+    const xpaymentsApi = process.env.NEXT_PUBLIC_XPAYMENTS_API
+    const secretKey = process.env.XPAYMENTS_SECRET_KEY
+    const storeId = process.env.XPAYMENTS_STORE_ID
+
+    if (!secretKey || !storeId || !xpaymentsApi) {
+      console.error('[XPayments] Missing environment variables')
+      return NextResponse.json(
+        { error: 'Configuração de pagamento indisponível.' },
+        { status: 500 },
+      )
+    }
 
     console.log(
-      `[XPayments] Order ${newOrder.id} created — €${newOrder.amount} [PENDING]`,
+      `[XPayments] Creating session — ${trackingNumber} — €${totalAmount} — ${items?.length || 0} items`,
     )
 
-    // 2. Pedir Sessão à XPayments
+    // Build metadata payload with full cart + tracking number
+    const metadata: Record<string, unknown> = {
+      trackingNumber,
+      customerName: customerName || 'Cliente Walluxe',
+      customerEmail: customerEmail || 'guest@walluxe.com',
+      shippingAddress: shippingAddress || null,
+      items: items || [],
+      itemCount: items?.length || 0,
+      totalItems: items?.reduce((sum: number, i: { quantity: number }) => sum + i.quantity, 0) || 0,
+    }
+
     const xpaymentsResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_XPAYMENTS_API}/api/v1/checkout/sessions`,
+      `${xpaymentsApi}/api/v1/checkout/sessions`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.XPAYMENTS_SECRET_KEY}`,
+          Authorization: `Bearer ${secretKey}`,
         },
         body: JSON.stringify({
-          storeId: process.env.XPAYMENTS_STORE_ID,
+          storeId,
           amountFiat: totalAmount,
           currency: 'EUR',
-          orderId: newOrder.id,
+          orderId: trackingNumber,
           customerDetails: {
-            email: customerEmail || 'cliente@walluxe.com',
+            email: customerEmail || 'guest@walluxe.com',
             fullName: customerName || 'Cliente Walluxe',
           },
+          metadata,
         }),
       },
     )
@@ -51,14 +82,23 @@ export async function POST(req: Request) {
     const session = await xpaymentsResponse.json()
 
     if (!session.success) {
-      return NextResponse.json({ error: session.error }, { status: 400 })
+      console.error('[XPayments] Session creation failed:', session.error)
+      return NextResponse.json(
+        { error: session.error || 'Erro ao criar sessão de pagamento.' },
+        { status: 400 },
+      )
     }
 
-    return NextResponse.json({ url: session.url })
+    console.log(`[XPayments] Session created — ${trackingNumber} → ${session.url}`)
+
+    return NextResponse.json({
+      url: session.url,
+      trackingNumber,
+    })
   } catch (error) {
     console.error('[XPayments API Error]:', error)
     return NextResponse.json(
-      { error: 'Erro ao gerar sessão de pagamento' },
+      { error: 'Erro ao gerar sessão de pagamento.' },
       { status: 500 },
     )
   }
