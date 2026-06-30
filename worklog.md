@@ -30,3 +30,30 @@ Stage Summary:
 - Order tracking with database backend
 - Admin panel accessible via #admin hash route
 - Payment integration via NeXFlowX API proxy
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Stateless checkout v4 — remove Prisma from payment flow
+
+Work Log:
+- Read and analyzed all existing checkout-related files
+- Rewrote /api/checkout/xpayments/route.ts as fully stateless (removed db import)
+- Added generateTrackingNumber() function (WLX-XXXXXX format)
+- Cart items sent in metadata field to XPayments API
+- Deleted /api/xpayments-webhook/route.ts (no longer needed without local DB)
+- Created src/components/cart/payment-modal.tsx (iframe modal with postMessage listener)
+- Updated src/components/cart/cart-drawer.tsx to use PaymentModal instead of redirect
+- Success screen shows: "Pagamento confirmado com sucesso! Irá receber os detalhes por email."
+- Created comprehensive technical README.md with architecture diagrams, flow docs, env vars
+- Updated .env with XPayments keys for local dev
+- ESLint passes with zero errors
+- Committed and pushed to GitHub (3f7a33a) via force-push (superseded v3)
+
+Stage Summary:
+- XPayments v4: fully stateless checkout flow
+- No Prisma/SQLite in payment path — Vercel-safe
+- Iframe modal with postMessage auto-close
+- Single source of truth: XPayments API
+- Technical README documented
+- Pushed to GitHub successfully
