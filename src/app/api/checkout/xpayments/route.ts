@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server'
 
 /**
- * Stateless XPayments Checkout Route
+ * Stateless XPayments Checkout Route — V2 Contract
  *
- * Generates a checkout session via XPayments API.
- * No local database — cart items are sent in metadata.
- * XPayments is the single source of truth for order/payment state.
+ * Generates a checkout session via XPayments API V2.
+ * No local database — XPayments is the single source of truth.
+ *
+ * V2 S2S Contract Rules:
+ * - Endpoint: POST /api/v1/checkout/session (SINGULAR)
+ * - Authorization: Bearer prefix is STRICTLY REQUIRED
+ * - storeId: omit entirely if missing/invalid, NEVER send empty string
+ * - Body: { amountFiat, currency, storeId?, metadata: { orderId } }
  */
 
 function generateTrackingNumber(): string {
@@ -29,74 +34,77 @@ export async function POST(req: Request) {
       )
     }
 
-    const trackingNumber = generateTrackingNumber()
-    const xpaymentsApi = process.env.NEXT_PUBLIC_XPAYMENTS_API
-    const secretKey = process.env.XPAYMENTS_SECRET_KEY
-    const storeId = process.env.XPAYMENTS_STORE_ID
-
-    if (!secretKey || !storeId || !xpaymentsApi) {
-      console.error('[XPayments] Missing environment variables')
+    // V2: XPAYMENTS_API_KEY is the ONLY required env var
+    const apiKey = process.env.XPAYMENTS_API_KEY
+    if (!apiKey) {
+      console.error('[XPayments V2] Missing XPAYMENTS_API_KEY')
       return NextResponse.json(
         { error: 'Configuração de pagamento indisponível.' },
         { status: 500 },
       )
     }
 
+    const trackingNumber = generateTrackingNumber()
+
     console.log(
-      `[XPayments] Creating session — ${trackingNumber} — €${totalAmount} — ${items?.length || 0} items`,
+      `[XPayments V2] Creating session — ${trackingNumber} — €${totalAmount} — ${items?.length || 0} items`,
     )
 
-    // Build metadata payload with full cart + tracking number
-    const metadata: Record<string, unknown> = {
-      trackingNumber,
-      customerName: customerName || 'Cliente Walluxe',
-      customerEmail: customerEmail || 'guest@walluxe.com',
-      shippingAddress: shippingAddress || null,
-      items: items || [],
-      itemCount: items?.length || 0,
-      totalItems: items?.reduce((sum: number, i: { quantity: number }) => sum + i.quantity, 0) || 0,
+    // V2: Build request body per strict contract
+    // storeId is OPTIONAL — omit entirely if not set, NEVER send empty string
+    const storeId = process.env.XPAYMENTS_STORE_ID
+
+    const requestBody: Record<string, unknown> = {
+      amountFiat: totalAmount,
+      currency: 'EUR',
+      ...(storeId ? { storeId } : {}),
+      metadata: {
+        orderId: trackingNumber,
+        customerName: customerName || 'Cliente Walluxe',
+        customerEmail: customerEmail || 'guest@walluxe.com',
+        shippingAddress: shippingAddress || null,
+        items: items || [],
+        itemCount: items?.length || 0,
+        totalItems: items?.reduce(
+          (sum: number, i: { quantity: number }) => sum + i.quantity,
+          0,
+        ) || 0,
+      },
     }
 
-    const xpaymentsResponse = await fetch(
-      `${xpaymentsApi}/api/v1/checkout/sessions`,
+    const xpRes = await fetch(
+      'https://api.xpayments.digital/api/v1/checkout/session',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${secretKey}`,
+          // V2: 'Bearer ' prefix is STRICTLY REQUIRED
+          Authorization: `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          storeId,
-          amountFiat: totalAmount,
-          currency: 'EUR',
-          orderId: trackingNumber,
-          customerDetails: {
-            email: customerEmail || 'guest@walluxe.com',
-            fullName: customerName || 'Cliente Walluxe',
-          },
-          metadata,
-        }),
+        body: JSON.stringify(requestBody),
       },
     )
 
-    const session = await xpaymentsResponse.json()
+    const session = await xpRes.json()
 
     if (!session.success) {
-      console.error('[XPayments] Session creation failed:', session.error)
+      console.error('[XPayments V2] Session creation failed:', session.error)
       return NextResponse.json(
         { error: session.error || 'Erro ao criar sessão de pagamento.' },
         { status: 400 },
       )
     }
 
-    console.log(`[XPayments] Session created — ${trackingNumber} → ${session.url}`)
+    console.log(
+      `[XPayments V2] Session created — ${trackingNumber} → ${session.url}`,
+    )
 
     return NextResponse.json({
       url: session.url,
       trackingNumber,
     })
   } catch (error) {
-    console.error('[XPayments API Error]:', error)
+    console.error('[XPayments V2 API Error]:', error)
     return NextResponse.json(
       { error: 'Erro ao gerar sessão de pagamento.' },
       { status: 500 },
