@@ -1,112 +1,95 @@
 import { NextResponse } from 'next/server'
 
 /**
- * Stateless XPayments Checkout Route — V2 Contract
+ * XPayments V2 — Server-to-Server (S2S) Checkout Route
  *
- * Generates a checkout session via XPayments API V2.
- * No local database — XPayments is the single source of truth.
- *
- * V2 S2S Contract Rules:
- * - Endpoint: POST /api/v1/checkout/session (SINGULAR)
- * - Authorization: Bearer prefix is STRICTLY REQUIRED
- * - storeId: omit entirely if missing/invalid, NEVER send empty string
- * - Body: { amountFiat, currency, storeId?, metadata: { orderId } }
+ * Contrato V2 estrito:
+ * - Endpoint: POST /api/v1/checkout/session (singular)
+ * - Authorization: Bearer prefix é ESTRITAMENTE OBRIGATÓRIO
+ * - storeId: omitir se vazio/inválido, NUNCA enviar string vazia ""
+ * - Body obrigatório: amountFiat (Number), currency
+ * - metadata: { orderId, customerEmail }
  */
 
-function generateTrackingNumber(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = ''
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return `WLX-${code}`
-}
+const XPAYMENTS_API_URL = 'https://api.xpayments.digital/api/v1/checkout/session'
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { items, totalAmount, customerEmail, customerName, shippingAddress } = body
+    const { totalAmount, orderId, email } = body
 
-    if (!totalAmount || totalAmount <= 0) {
-      return NextResponse.json(
+    // 1. Validar amount
+    if (!totalAmount || Number(totalAmount) <= 0) {
+      return Response.json(
         { error: 'Valor total inválido.' },
         { status: 400 },
       )
     }
 
-    // V2: XPAYMENTS_API_KEY is the ONLY required env var
-    const apiKey = process.env.XPAYMENTS_API_KEY
-    if (!apiKey) {
-      console.error('[XPayments V2] Missing XPAYMENTS_API_KEY')
-      return NextResponse.json(
-        { error: 'Configuração de pagamento indisponível.' },
+    // 2. Buscar as chaves de ambiente
+    const secretKey = process.env.XPAYMENTS_SECRET_KEY
+    const storeId = process.env.XPAYMENTS_STORE_ID
+
+    if (!secretKey) {
+      console.error('[Walluxe] XPAYMENTS_SECRET_KEY não configurada no servidor')
+      return Response.json(
+        { error: 'XPAYMENTS_SECRET_KEY não configurada no servidor da Walluxe' },
         { status: 500 },
       )
     }
 
-    const trackingNumber = generateTrackingNumber()
-
-    console.log(
-      `[XPayments V2] Creating session — ${trackingNumber} — €${totalAmount} — ${items?.length || 0} items`,
-    )
-
-    // V2: Build request body per strict contract
-    // storeId is OPTIONAL — omit entirely if not set, NEVER send empty string
-    const storeId = process.env.XPAYMENTS_STORE_ID
-
-    const requestBody: Record<string, unknown> = {
-      amountFiat: totalAmount,
+    // 3. Montar o payload — amountFiat obrigatório como Number
+    const payload: Record<string, unknown> = {
+      amountFiat: Number(totalAmount),
       currency: 'EUR',
-      ...(storeId ? { storeId } : {}),
       metadata: {
-        orderId: trackingNumber,
-        customerName: customerName || 'Cliente Walluxe',
-        customerEmail: customerEmail || 'guest@walluxe.com',
-        shippingAddress: shippingAddress || null,
-        items: items || [],
-        itemCount: items?.length || 0,
-        totalItems: items?.reduce(
-          (sum: number, i: { quantity: number }) => sum + i.quantity,
-          0,
-        ) || 0,
+        orderId: orderId || `WLX-${Date.now().toString(36).toUpperCase()}`,
+        customerEmail: email || 'guest@walluxe.com',
       },
     }
 
-    const xpRes = await fetch(
-      'https://api.xpayments.digital/api/v1/checkout/session',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // V2: 'Bearer ' prefix is STRICTLY REQUIRED
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify(requestBody),
-      },
+    // 4. Segurança: NUNCA enviar storeId como string vazia ""
+    if (storeId && storeId.trim() !== '') {
+      payload.storeId = storeId
+    }
+
+    console.log(
+      `[Walluxe] XPayments V2 S2S — orderId: ${payload.metadata.orderId} — €${payload.amountFiat}`,
     )
 
-    const session = await xpRes.json()
+    // 5. Chamada S2S com Bearer Token obrigatório
+    const xpRes = await fetch(XPAYMENTS_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${secretKey}`,
+      },
+      body: JSON.stringify(payload),
+    })
 
-    if (!session.success) {
-      console.error('[XPayments V2] Session creation failed:', session.error)
-      return NextResponse.json(
-        { error: session.error || 'Erro ao criar sessão de pagamento.' },
-        { status: 400 },
+    const xpData = await xpRes.json()
+
+    if (!xpRes.ok || !xpData.success) {
+      console.error('[Walluxe] Erro XPayments:', xpData)
+      return Response.json(
+        { error: xpData.error || 'Erro no Gateway' },
+        { status: xpRes.status },
       )
     }
 
+    // A XPayments devolve um url de checkout seguro
     console.log(
-      `[XPayments V2] Session created — ${trackingNumber} → ${session.url}`,
+      `[Walluxe] XPayments V2 session criada — ${xpData.url}`,
     )
 
-    return NextResponse.json({
-      url: session.url,
-      trackingNumber,
+    return Response.json({
+      success: true,
+      checkoutUrl: xpData.url,
     })
   } catch (error) {
-    console.error('[XPayments V2 API Error]:', error)
-    return NextResponse.json(
-      { error: 'Erro ao gerar sessão de pagamento.' },
+    console.error('[Walluxe] Falha de rede ao contactar XPayments:', error)
+    return Response.json(
+      { error: 'Erro de comunicação com o Gateway' },
       { status: 500 },
     )
   }

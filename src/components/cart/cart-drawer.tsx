@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import {
   ShoppingCart,
   Plus,
@@ -23,7 +23,6 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useCartStore, type CartItem } from '@/lib/store/cart-store'
 import { useI18n } from '@/lib/i18n/context'
-import { PaymentModal } from '@/components/cart/payment-modal'
 
 interface CartDrawerProps {
   open: boolean
@@ -33,15 +32,13 @@ interface CartDrawerProps {
 const FREE_SHIPPING_THRESHOLD = 10
 
 export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
-  const { items, totalItems, totalPrice, updateQuantity, removeItem, clearCart } =
+  const { items, totalItems, totalPrice, updateQuantity, removeItem } =
     useCartStore()
   const { t } = useI18n()
 
   const [isProcessing, setIsProcessing] = useState(false)
   const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [paymentUrl, setPaymentUrl] = useState<string | null>(null)
-  const [paymentKey, setPaymentKey] = useState(0)
 
   const prevOpenRef = useRef(open)
   useEffect(() => {
@@ -68,68 +65,41 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
 
   const hasFreeShipping = totalPrice >= FREE_SHIPPING_THRESHOLD
 
-  const handleXPaymentsCheckout = async () => {
+  const handleCheckout = async () => {
     if (items.length === 0) return
 
     setIsCheckingOut(true)
-    setIsProcessing(true)
     setError(null)
 
     try {
+      // Gerar orderId único para esta encomenda
+      const currentOrderId = `WLX-${Date.now().toString(36).toUpperCase()}`
+
+      // Faz a chamada ao nosso backend (que por sua vez chama a XPayments V2)
       const response = await fetch('/api/checkout/xpayments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          items: items.map(({ id, name, price, quantity, color }) => ({
-            id,
-            name,
-            price,
-            quantity,
-            color,
-          })),
           totalAmount: totalPrice,
-          customerEmail: 'guest@walluxe.com',
-          customerName: 'Cliente Walluxe',
+          orderId: currentOrderId,
+          email: 'guest@walluxe.com',
         }),
       })
 
       const data = await response.json()
 
-      if (!response.ok) {
-        setError(data.error || 'Erro ao processar pagamento')
-        setIsCheckingOut(false)
-        setIsProcessing(false)
-        return
-      }
-
-      if (data.url) {
-        // Close the cart drawer and open the payment modal
-        onOpenChange(false)
-        setPaymentUrl(data.url)
-        setPaymentKey((k) => k + 1)
+      if (data.success && data.checkoutUrl) {
+        // Redireciona o cliente para a página segura de pagamento da XPayments
+        window.location.href = data.checkoutUrl
       } else {
-        setError('URL de pagamento não recebida da API')
+        setError(data.error || 'Ocorreu um erro ao gerar o pagamento.')
         setIsCheckingOut(false)
-        setIsProcessing(false)
       }
     } catch {
-      setError('Erro de rede. Verifique a ligação.')
+      setError('Erro de ligação ao servidor.')
       setIsCheckingOut(false)
-      setIsProcessing(false)
     }
   }
-
-  const handlePaymentSuccess = useCallback(() => {
-    clearCart()
-    setIsCheckingOut(false)
-    setIsProcessing(false)
-  }, [clearCart])
-
-  const handlePaymentClose = useCallback(() => {
-    setPaymentUrl(null)
-    setIsCheckingOut(false)
-    setIsProcessing(false)
-  }, [])
 
   if (items.length === 0) {
     return (
@@ -160,195 +130,183 @@ export function CartDrawer({ open, onOpenChange }: CartDrawerProps) {
   }
 
   return (
-    <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 gap-0">
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col p-0 gap-0">
 
-          <SheetHeader className="flex-shrink-0 p-5 pb-3">
-            <SheetTitle className="flex items-center gap-2 text-lg font-bold text-zinc-900">
-              <ShoppingCart className="h-5 w-5" />
-              {t('cart.title')}
-              {totalItems > 0 && (
-                <span className="text-sm font-medium text-zinc-400">({totalItems})</span>
+        <SheetHeader className="flex-shrink-0 p-5 pb-3">
+          <SheetTitle className="flex items-center gap-2 text-lg font-bold text-zinc-900">
+            <ShoppingCart className="h-5 w-5" />
+            {t('cart.title')}
+            {totalItems > 0 && (
+              <span className="text-sm font-medium text-zinc-400">({totalItems})</span>
+            )}
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="flex-shrink-0 px-5 pb-3">
+          <div className="rounded-lg bg-stone-50 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Truck className="h-4 w-4 flex-shrink-0 text-[#c69a5c]" />
+              {hasFreeShipping ? (
+                <span className="text-sm font-medium text-emerald-600 flex items-center gap-1">
+                  <Check className="h-3.5 w-3.5" />
+                  {t('cart.freeShippingQualified')}
+                </span>
+              ) : (
+                <span className="text-sm text-zinc-600">
+                  {t('cart.freeShippingAway', {
+                    amount: remainingForFreeShipping.toFixed(2),
+                  })}
+                </span>
               )}
-            </SheetTitle>
-          </SheetHeader>
-
-          <div className="flex-shrink-0 px-5 pb-3">
-            <div className="rounded-lg bg-stone-50 p-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Truck className="h-4 w-4 flex-shrink-0 text-[#c69a5c]" />
-                {hasFreeShipping ? (
-                  <span className="text-sm font-medium text-emerald-600 flex items-center gap-1">
-                    <Check className="h-3.5 w-3.5" />
-                    {t('cart.freeShippingQualified')}
-                  </span>
-                ) : (
-                  <span className="text-sm text-zinc-600">
-                    {t('cart.freeShippingAway', {
-                      amount: remainingForFreeShipping.toFixed(2),
-                    })}
-                  </span>
-                )}
-              </div>
-              <div className="h-2 w-full rounded-full bg-stone-200 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ease-out ${
-                    hasFreeShipping ? 'bg-emerald-500' : 'bg-[#c69a5c]'
-                  }`}
-                  style={{ width: `${shippingProgress}%` }}
-                />
-              </div>
+            </div>
+            <div className="h-2 w-full rounded-full bg-stone-200 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ease-out ${
+                  hasFreeShipping ? 'bg-emerald-500' : 'bg-[#c69a5c]'
+                }`}
+                style={{ width: `${shippingProgress}%` }}
+              />
             </div>
           </div>
+        </div>
 
-          <Separator />
+        <Separator />
 
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="px-5 py-4 space-y-3">
-              {items.map((item: CartItem) => (
-                <div
-                  key={`${item.id}-${item.color}`}
-                  className="flex gap-3 rounded-xl border border-zinc-100 bg-white p-3"
-                >
-                  <div className="h-20 w-20 flex-shrink-0 rounded-lg overflow-hidden bg-stone-100">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="h-full w-full object-cover"
-                    />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="px-5 py-4 space-y-3">
+            {items.map((item: CartItem) => (
+              <div
+                key={`${item.id}-${item.color}`}
+                className="flex gap-3 rounded-xl border border-zinc-100 bg-white p-3"
+              >
+                <div className="h-20 w-20 flex-shrink-0 rounded-lg overflow-hidden bg-stone-100">
+                  <img
+                    src={item.image}
+                    alt={item.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-zinc-900 truncate">
+                        {item.name}
+                      </p>
+                      <p className="text-xs text-zinc-400 mt-0.5">{item.color}</p>
+                    </div>
+                    <button
+                      onClick={() => removeItem(item.id, item.color)}
+                      className="flex-shrink-0 p-1 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"
+                      aria-label="Remove item"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-zinc-900 truncate">
-                          {item.name}
-                        </p>
-                        <p className="text-xs text-zinc-400 mt-0.5">{item.color}</p>
-                      </div>
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center border border-zinc-200 rounded-lg overflow-hidden">
                       <button
-                        onClick={() => removeItem(item.id, item.color)}
-                        className="flex-shrink-0 p-1 rounded-md hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"
-                        aria-label="Remove item"
+                        onClick={() =>
+                          updateQuantity(item.id, item.color, item.quantity - 1)
+                        }
+                        className="px-2 py-1 hover:bg-stone-50 transition-colors"
+                        aria-label="Decrease"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Minus className="h-3 w-3 text-zinc-500" />
+                      </button>
+                      <span className="px-2.5 py-1 text-xs font-semibold text-zinc-900 tabular-nums min-w-[1.5rem] text-center">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() =>
+                          updateQuantity(item.id, item.color, item.quantity + 1)
+                        }
+                        className="px-2 py-1 hover:bg-stone-50 transition-colors"
+                        aria-label="Increase"
+                      >
+                        <Plus className="h-3 w-3 text-zinc-500" />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center border border-zinc-200 rounded-lg overflow-hidden">
-                        <button
-                          onClick={() =>
-                            updateQuantity(item.id, item.color, item.quantity - 1)
-                          }
-                          className="px-2 py-1 hover:bg-stone-50 transition-colors"
-                          aria-label="Decrease"
-                        >
-                          <Minus className="h-3 w-3 text-zinc-500" />
-                        </button>
-                        <span className="px-2.5 py-1 text-xs font-semibold text-zinc-900 tabular-nums min-w-[1.5rem] text-center">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() =>
-                            updateQuantity(item.id, item.color, item.quantity + 1)
-                          }
-                          className="px-2 py-1 hover:bg-stone-50 transition-colors"
-                          aria-label="Increase"
-                        >
-                            <Plus className="h-3 w-3 text-zinc-500" />
-                        </button>
-                      </div>
-                      <span className="text-sm font-bold text-zinc-900 tabular-nums">
-                        €{(item.price * item.quantity).toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
+                    <span className="text-sm font-bold text-zinc-900 tabular-nums">
+                      €{(item.price * item.quantity).toFixed(2).replace('.', ',')}
+                    </span>
                   </div>
                 </div>
-              ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-shrink-0 border-t border-zinc-100 bg-white safe-bottom">
+          <div className="px-5 pt-4 pb-2 space-y-3">
+
+            {error && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
+                {error}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-zinc-600">{t('cart.total')}</span>
+              <span className="text-xl font-extrabold text-zinc-900 tabular-nums">
+                €{totalPrice.toFixed(2).replace('.', ',')}
+              </span>
+            </div>
+
+            {hasFreeShipping && (
+              <div className="flex items-center gap-1.5 text-xs text-emerald-600">
+                <Check className="h-3.5 w-3.5" />
+                <span>{t('cart.freeShippingQualified')}</span>
+              </div>
+            )}
+
+            <Button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                handleCheckout()
+              }}
+              disabled={isCheckingOut}
+              className="w-full py-4 rounded-xl text-base font-bold bg-[#D4AF37] hover:bg-[#b5952f] text-black shadow-lg transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {isCheckingOut ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  A redirecionar...
+                </span>
+              ) : (
+                <span className="flex items-center justify-center gap-2">
+                  <Lock className="h-4 w-4" />
+                  {t('cart.checkout') || 'Finalizar Compra Segura'}
+                </span>
+              )}
+            </Button>
+
+            <div className="flex items-center justify-center gap-1.5 pt-1">
+              <Shield className="h-3 w-3 text-zinc-400" />
+              <Lock className="h-3 w-3 text-zinc-400" />
+              <span className="text-[10px] font-medium text-zinc-400">
+                {t('card.paymentPoweredBy')}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-center gap-2 pb-3">
+              <span className="text-[10px] font-bold text-zinc-500 bg-stone-100 px-2 py-1 rounded">
+                VISA
+              </span>
+              <span className="text-[10px] font-bold text-zinc-500 bg-stone-100 px-2 py-1 rounded">
+                MC
+              </span>
+              <span className="text-[10px] font-bold text-zinc-500 bg-stone-100 px-2 py-1 rounded">
+                MBWay
+              </span>
+              <span className="text-[10px] font-bold text-zinc-500 bg-stone-100 px-2 py-1 rounded">
+                Multibanco
+              </span>
             </div>
           </div>
-
-          <div className="flex-shrink-0 border-t border-zinc-100 bg-white safe-bottom">
-            <div className="px-5 pt-4 pb-2 space-y-3">
-
-              {error && (
-                <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-600">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-zinc-600">{t('cart.total')}</span>
-                <span className="text-xl font-extrabold text-zinc-900 tabular-nums">
-                  €{totalPrice.toFixed(2).replace('.', ',')}
-                </span>
-              </div>
-
-              {hasFreeShipping && (
-                <div className="flex items-center gap-1.5 text-xs text-emerald-600">
-                  <Check className="h-3.5 w-3.5" />
-                  <span>{t('cart.freeShippingQualified')}</span>
-                </div>
-              )}
-
-              <Button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault()
-                  handleXPaymentsCheckout()
-                }}
-                disabled={isCheckingOut}
-                className="w-full py-4 rounded-xl text-base font-bold bg-[#D4AF37] hover:bg-[#b5952f] text-black shadow-lg transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isCheckingOut ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    A preparar pagamento...
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center gap-2">
-                    <Lock className="h-4 w-4" />
-                    {t('cart.checkout') || 'Finalizar Compra Segura'}
-                  </span>
-                )}
-              </Button>
-
-              <div className="flex items-center justify-center gap-1.5 pt-1">
-                <Shield className="h-3 w-3 text-zinc-400" />
-                <Lock className="h-3 w-3 text-zinc-400" />
-                <span className="text-[10px] font-medium text-zinc-400">
-                  {t('card.paymentPoweredBy')}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-center gap-2 pb-3">
-                <span className="text-[10px] font-bold text-zinc-500 bg-stone-100 px-2 py-1 rounded">
-                  VISA
-                </span>
-                <span className="text-[10px] font-bold text-zinc-500 bg-stone-100 px-2 py-1 rounded">
-                  MC
-                </span>
-                <span className="text-[10px] font-bold text-zinc-500 bg-stone-100 px-2 py-1 rounded">
-                  MBWay
-                </span>
-                <span className="text-[10px] font-bold text-zinc-500 bg-stone-100 px-2 py-1 rounded">
-                  Multibanco
-                </span>
-              </div>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Payment Modal (iframe) — renders outside the Sheet */}
-      {paymentUrl && (
-        <PaymentModal
-          url={paymentUrl}
-          paymentKey={paymentKey}
-          onClose={handlePaymentClose}
-          onSuccess={handlePaymentSuccess}
-        />
-      )}
-    </>
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }
